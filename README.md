@@ -1,1 +1,2 @@
 # Visibility-Graph_distance
+使用git进行代码管理版本的VGdistance研究
