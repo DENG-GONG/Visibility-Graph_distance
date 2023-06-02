@@ -7,11 +7,12 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from fastdtw import dtw as dtw
+# from fastdtw import dtw as dtw
 from _tools import *
 from scipy.spatial.distance import minkowski
 import os
 import multiprocessing as mlp
+from dtw import *
 from scipy.spatial.distance import euclidean
 
 plt.rcParams['font.sans-serif']=['SimHei'] #用来正常显示中文标签
@@ -120,15 +121,23 @@ def plot_res(all_res,xlabel,title,savename,xlim=None,ylim=None,xtick=None):
     plt.title(title)
     plt.savefig(f'fig/{savename}.png',dpi=300)
     plt.savefig(f'fig/svg/{savename}.svg',dpi=300)
-    # plt.show()
+    plt.show()
 
+#补充dtw
+def dtw_compare(TS1:np.ndarray,TS2:np.ndarray,new_TS2:np.ndarray):
+    man_ds1=dtw(TS1,TS2,dist_method='mahalanobis',distance_only=True).distance
+    man_ds2=dtw(TS1,new_TS2,dist_method='mahalanobis',distance_only=True).distance
+    eu_ds1=dtw(TS1,TS2,distance_only=True).distance
+    eu_ds2=dtw(TS1,new_TS2,distance_only=True).distance
+    return [abs(man_ds2-man_ds1)/(man_ds1+1),abs(eu_ds1-eu_ds2)/(eu_ds1+1)]
 # xlabels=['序列长度','噪声强度','序列长度','噪声强度','序列长度','偏移强度','序列长度','伸缩强度','序列长度','漂移强度']
 # ylabels=['正太分布的噪声-m','均匀分布的噪声','正态分布的噪声','均匀分布的噪声',"",'','','','','']
 savenames2=["m-正太",'db-正太','m-均匀','db-均匀','m-抗偏','db-抗偏','m-抗伸','db-抗伸','m-抗漂','db-抗漂']
 # savenames=["抗噪-m-正太-细节",'抗噪-m-均匀-细节','抗噪-db-正太-细节','抗噪-db-均匀-细节','抗偏-m-细节','抗偏-db-细节','抗伸-m-细节','抗伸-db-细节','抗漂-m-细节','抗漂-db-细节']
 # title=["讨论不同长度的序列稳定性对影响","讨论不同长度的序列稳定性对影响","讨论不同强度的正太噪声对稳定性的影响","讨论不同强度的均匀噪声对稳定性的影响"]
-def m_shiyan(i,len_,form_noise_fun,remake=False,iter=1000,xlim=[4,200],ylim=[0,0.2]):
+def m_shiyan(i,len_,form_noise_fun,remake=False,iter=1000,xlim=[4,200],ylim=None):
     i=i*2
+    print(savenames2[i])
     if not remake and os.path.exists(f"save_data/compare/mat/{savenames2[i]}.npy"):
         all_res=np.load(f"save_data/compare/mat/{savenames2[i]}.npy")
     else:
@@ -143,13 +152,13 @@ def m_shiyan(i,len_,form_noise_fun,remake=False,iter=1000,xlim=[4,200],ylim=[0,0
         np.save(f"save_data/compare/mat/{savenames2[i]}", all_res)
     plot_res(all_res,"序列长度",savename=savenames2[i],xlim=xlim,ylim=ylim,title="讨论不同长度的序列对不稳定性对影响")
     print(f"{savenames2[i]} have done")
-def db_shiyan(i, start, end, form_noise_fun, remake=False, iter=1000, ylim=[0, 0.2]):
+def db_shiyan(i, start, end, form_noise_fun, remake=False, iter=1000, ylim=None):
     i=2*i+1
     if not remake and os.path.exists(f"save_data/compare/mat/{savenames2[i]}.npy"):
         all_res=np.load(f"save_data/compare/mat/{savenames2[i]}.npy")
     else:
-        all_res=np.zeros([4, (end - start)])
-        all_res[:,0]=0
+        all_res=np.zeros([4, (end - start+1)])
+        # all_res[:,0]=0
         for index,j in enumerate(range(start, end + 1)):
             all_temp=np.zeros([4,iter])
             for k in range(iter):
@@ -159,6 +168,41 @@ def db_shiyan(i, start, end, form_noise_fun, remake=False, iter=1000, ylim=[0, 0
         os.makedirs(f"save_data/compare/mat", exist_ok=True)
         np.save(f"save_data/compare/mat/{savenames2[i]}", all_res)
     plot_res(all_res,"干扰强度", savename=savenames2[i], ylim=ylim, title="讨论不同强度的干扰对不稳定性的影响",xtick=[start,end+1])
+    print(f"{savenames2[i]} have done")
+def dtw_m_shiyan(i,len_,form_noise_fun,remake=False,iter=1000,xlim=[4,200],ylim=None):
+    i=i*2
+    print(savenames2[i])
+    if not remake and os.path.exists(f"save_data/compare/mat/{savenames2[i]}_dtw.npy"):
+        all_res=np.load(f"save_data/compare/mat/{savenames2[i]}.npy")
+    else:
+        all_res=np.zeros([2,len_])
+        for m in range(4,len_):
+            all_temp=np.zeros([2,iter])
+            for k in range(iter):
+                all_temp[:,k]=dtw_compare(*form_noise_fun(m,np.random.randint(1,200)))
+                # print(all_temp[:,k])
+            all_res[:,m]=np.mean(all_temp,axis=1)
+        os.makedirs(f"save_data/compare/mat", exist_ok=True)
+        np.save(f"save_data/compare/mat/{savenames2[i]}_dtw", all_res)
+    # plot_res(all_res,"序列长度",savename=savenames2[i],xlim=xlim,ylim=ylim,title="讨论不同长度的序列对不稳定性对影响")
+    print(f"{savenames2[i]} have done")
+def dtw_db_shiyan(i, start, end, form_noise_fun, remake=False, iter=1000, ylim=None):
+
+    i=2*i+1
+    print(i, start, end, form_noise_fun, remake)
+    if not remake and os.path.exists(f"save_data/compare/mat/{savenames2[i]}_dtw.npy"):
+        all_res=np.load(f"save_data/compare/mat/{savenames2[i]}.npy")
+    else:
+        all_res=np.zeros([2, (end - start+1)])
+        for index,j in enumerate(range(start, end + 1)):
+            all_temp=np.zeros([2,iter])
+            for k in range(iter):
+                all_temp[:,k]=dtw_compare(*form_noise_fun(np.random.randint(4,200),j))
+                # print(all_temp[:,k])
+            all_res[:,index]=np.mean(all_temp,axis=1)
+        os.makedirs(f"save_data/compare/mat", exist_ok=True)
+        np.save(f"save_data/compare/mat/{savenames2[i]}_dtw", all_res)
+    # plot_res(all_res,"干扰强度", savename=savenames2[i], ylim=ylim, title="讨论不同强度的干扰对不稳定性的影响",xtick=[start,end+1])
     print(f"{savenames2[i]} have done")
 def re_plot(i,xlabel,title,xlim,ylim):
     mat=np.load(f"save_data/compare/mat/{savenames2[i]}.npy")
@@ -208,18 +252,22 @@ def db_shiyan_exp(start,end,form_noise_fun,iter=200,chusu=1000):
     # print(f"{savenames2[i]} have done")
 if __name__=="__main__":
     shi_yan_list=[form_norm_noise_test_Data,form_unif_noise_test_Data,form_amplitude_excursion_test_Data,form_Amplitude_stretch_test_Data,form_Linear_drift_test_Data]
-    # pool=mlp.Pool(3)
-    # pool.starmap_async(m_shiyan,zip(range(1,5),[200]*4,shi_yan_list,[True]*4))
-    # pool.starmap(db_shiyan,zip(range(2,5),[-200]*3,[200]*3,shi_yan_list[2:] ))
-    # pool.close()
-    # pool.join()
+    pool=mlp.Pool(5)
+    # pool.starmap_async(dtw_m_shiyan,[[i,200,shi_yan_list[i],True] for i in range(5)])
+    pool.starmap_async(dtw_db_shiyan,[[i,0,200,shi_yan_list[i],True] for i in range(2)])
+    pool.starmap_async(dtw_db_shiyan,[[i,-200,200,shi_yan_list[i],True] for i in range(2,5)])
+    pool.starmap_async(db_shiyan,[[i,0,200,shi_yan_list[i],True] for i in range(2)])
+    pool.starmap_async(db_shiyan,[[i,-200,200,shi_yan_list[i],True] for i in range(2 ,5)])
+    pool.close()
+    pool.join()
+    # db_shiyan(4,-200,200,shi_yan_list[4],True)
     # re_plot(6,"序列长度","讨论不同长度的序列对稳定性的影响",[4,200],[0,0.3])
     # re_plot(8,"序列长度","讨论不同长度的序列对稳定性的影响",[4,200],[0,0.5])
     # re_plot(7,"干扰强度","讨论不同强度的干扰对稳定性的影响",[0,200],[0,0.5])
     # a,b,c=form_unif_noise_test_Data(10,0.3)
     # print(c-b)
     # for i in range(5):
-    #     db_shiyan(i,300,shi_yan_list[i])
+    #     m_shiyan(i,200,shi_yan_list[i],ylim=None)
     #     res=np.load(f"save_data/compare/mat2/{savenames2[2 * i - 1]}.npy")
     #     np.save(f"save_data/compare/mat/{savenames2[2 * i + 1]}.npy",res)
     # db_shiyan_exp(0,300,form_Linear_drift_test_Data,iter=10)
@@ -230,4 +278,4 @@ if __name__=="__main__":
     # degree_dis1,vg_dis1=from_VG_adj_to_vg_and_degree_distance(VG1,VG2)
     # degree_dis2,vg_dis2=from_VG_adj_to_vg_and_degree_distance(VG1,VG3)
     # print(abs(vg_dis2-vg_dis1)/(vg_dis1+1))
-    m_shiyan(4,200,form_Linear_drift_test_Data,True,ylim=None)
+    # m_shiyan(4,200,form_Linear_drift_test_Data,True,ylim=None)
